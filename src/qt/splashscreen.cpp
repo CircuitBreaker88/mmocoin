@@ -77,7 +77,7 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
 
     QRect rectMantis(QPoint(5,25), QSize(1007/3.5,900/3.5));
 
-    pixPaint.drawPixmap(rectMantis, QPixmap(":/images/mantis"));
+    pixPaint.drawPixmap(rectMantis, QPixmap(":/images/mmohero"));
 
     // check font size and drawing with
     pixPaint.setFont(QFont(font, 33*fontFactor));
