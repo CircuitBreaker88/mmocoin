@@ -477,6 +477,7 @@ bool LoadMempool();
 int64_t GetProofOfWorkReward();
 int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nCoinValue);
 int64_t GetLadderReward(int64_t nCoinValue);
+bool GetCoinAge(const CTransaction& tx, const CCoinsViewCache &view, uint64_t& nCoinAge, int64_t& nCoinValue);
 bool SignBlock(CBlock& block, const CKeyStore& keystore);
 bool CheckBlockSignature(const CBlock& block);
 

@@ -8,7 +8,7 @@
 #include <primitives/transaction.h>
 #include <script/interpreter.h>
 #include <consensus/validation.h>
-#include <wallet/wallet.h>
+
 #include <kernel.h>
 #include <validation.h>   // GetCoinAge()
 
@@ -247,6 +247,8 @@ bool Consensus::CheckTxInputs(const CTransaction& tx, CValidationState& state, c
         // mmocoin: coin stake tx earns reward instead of paying fee
         uint64_t nCoinAge;
         int64_t nCoinValue;
+        if (!GetCoinAge(tx, inputs, nCoinAge, nCoinValue))
+            return state.DoS(100, false, REJECT_INVALID, "unable to get coin age for coinstake");
         CAmount nStakeReward = tx.GetValueOut() - nValueIn;
         CAmount nCoinstakeCost = (GetMinFee(tx) < PERKB_TX_FEE) ? 0 : (GetMinFee(tx) - PERKB_TX_FEE);
         if (nStakeReward > GetProofOfStakeReward(nCoinAge, nCoinValue) - nCoinstakeCost)

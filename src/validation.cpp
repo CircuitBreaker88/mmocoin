@@ -3126,17 +3126,28 @@ bool ProcessNewBlockHeaders(int32_t& nPoSTemperature, const uint256& lastAccepte
         }
 
         for (const CBlockHeader& header : headers) {
+            bool fPoS = header.nFlags & CBlockIndex::BLOCK_PROOF_OF_STAKE;
+            bool fHavePoW = !fPoS && mapBlockIndex.count(header.GetHash());
+
             CBlockIndex *pindex = nullptr; // Use a temp pindex instead of ppindex to avoid a const_cast
             if (!g_chainstate.AcceptBlockHeader(header, header.nFlags & CBlockIndex::BLOCK_PROOF_OF_STAKE, state, chainparams, &pindex, fOldClient)) {
+                nPoSTemperature += POW_HEADER_COOLING;
                 if (first_invalid) *first_invalid = header;
                 return false;
             }
             if (ppindex) {
                 *ppindex = pindex;
             }
-            bool fPoS = header.nFlags & CBlockIndex::BLOCK_PROOF_OF_STAKE;
-            nPoSTemperature += fPoS ? 1 : -nCooling;
-            nPoSTemperature = std::max((int)nPoSTemperature, 0);
+
+            if (fPoS) {
+                nPoSTemperature++;
+            } else { // PoW
+                int d = chainActive.Height() - pindex->nHeight;
+                if (fHavePoW || d > 36)
+                    nCooling = 0;
+                nPoSTemperature -= nCooling;
+                nPoSTemperature = std::max((int)nPoSTemperature, 0);
+            }
         }
     }
     NotifyHeaderTip();
@@ -4558,6 +4569,78 @@ public:
         mapBlockIndex.clear();
     }
 } instance_of_cmaincleanup;
+
+
+
+
+
+// mmocoin: total coin age spent in transaction, in the unit of coin-days.
+// Only those coins meeting minimum age requirement counts. As those
+// transactions not in main chain are not currently indexed so we
+// might not find out about their coin age. Older transactions are
+// guaranteed to be in main chain by sync-checkpoint. This rule is
+// introduced to help nodes establish a consistent view of the coin
+// age (trust score) of competing branches.
+bool GetCoinAge(const CTransaction& tx, const CCoinsViewCache &view, uint64_t& nCoinAge, int64_t& nCoinValue)
+{
+    arith_uint256 bnCentSecond = 0;  // coin age in the unit of cent-seconds
+    nCoinAge = 0;
+    nCoinValue = 0;
+
+    if (tx.IsCoinBase())
+        return true;
+
+    for (const auto& txin : tx.vin)
+    {
+        // First try finding the previous transaction in database
+        const COutPoint &prevout = txin.prevout;
+        Coin coin;
+
+        if (!view.GetCoin(prevout, coin))
+            continue;  // previous transaction not in main chain
+        if (tx.nTime < coin.nTime)
+            return false;  // Transaction timestamp violation
+
+        // Transaction index is required to get to block header
+        if (!fTxIndex)
+            return false;  // Transaction index not available
+
+        CDiskTxPos postx;
+        CTransactionRef txPrev;
+        if (pblocktree->ReadTxIndex(prevout.hash, postx))
+        {
+            CAutoFile file(OpenBlockFile(postx, true), SER_DISK, CLIENT_VERSION);
+            CBlockHeader header;
+            try {
+                file >> header;
+                fseek(file.Get(), postx.nTxOffset, SEEK_CUR);
+                file >> txPrev;
+            } catch (std::exception &e) {
+                return error("%s() : deserialize or I/O error in GetCoinAge()", __PRETTY_FUNCTION__);
+            }
+            if (txPrev->GetHash() != prevout.hash)
+                return error("%s() : txid mismatch in GetCoinAge()", __PRETTY_FUNCTION__);
+
+            if (header.GetBlockTime() + Params().GetConsensus().nStakeMinAge > tx.nTime)
+                continue; // only count coins meeting min age requirement
+
+            int64_t nValueIn = txPrev->vout[txin.prevout.n].nValue;
+            nCoinValue += nValueIn;
+            bnCentSecond += arith_uint256(nValueIn) * (tx.nTime-txPrev->nTime) / CENT;
+
+            if (gArgs.GetBoolArg("-printcoinage", false))
+                LogPrintf("coin age nValueIn=%-12lld nTimeDiff=%d bnCentSecond=%s\n", nValueIn, tx.nTime - txPrev->nTime, bnCentSecond.ToString());
+        }
+        else
+            return error("%s() : tx missing in tx index in GetCoinAge()", __PRETTY_FUNCTION__);
+    }
+
+    arith_uint256 bnCoinDay = bnCentSecond * CENT / COIN / (24 * 60 * 60);
+    if (gArgs.GetBoolArg("-printcoinage", false))
+        LogPrintf("coin age bnCoinDay=%s\n", bnCoinDay.ToString());
+    nCoinAge = bnCoinDay.GetLow64();
+    return true;
+}
 
 // mmocoin: sign block
 typedef std::vector<unsigned char> valtype;

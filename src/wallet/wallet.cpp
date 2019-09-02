@@ -2741,37 +2741,6 @@ bool CWallet::CreateTransaction(const std::vector<CRecipient>& vecSend, CWalletT
     CMutableTransaction txNew;
     txNew.nTime = wtxNew.tx->nTime;  // mmocoin: set time
 
-    // Discourage fee sniping.
-    //
-    // For a large miner the value of the transactions in the best block and
-    // the mempool can exceed the cost of deliberately attempting to mine two
-    // blocks to orphan the current best block. By setting nLockTime such that
-    // only the next block can include the transaction, we discourage this
-    // practice as the height restricted and limited blocksize gives miners
-    // considering fee sniping fewer options for pulling off this attack.
-    //
-    // A simple way to think about this is from the wallet's point of view we
-    // always want the blockchain to move forward. By setting nLockTime this
-    // way we're basically making the statement that we only want this
-    // transaction to appear in the next block; we don't want to potentially
-    // encourage reorgs by allowing transactions to appear at lower heights
-    // than the next block in forks of the best chain.
-    //
-    // Of course, the subsidy is high enough, and transaction volume low
-    // enough, that fee sniping isn't a problem yet, but by implementing a fix
-    // now we ensure code won't be written that makes assumptions about
-    // nLockTime that preclude a fix later.
-    txNew.nLockTime = chainActive.Height();
-
-    // Secondly occasionally randomly pick a nLockTime even further back, so
-    // that transactions that are delayed after signing for whatever reason,
-    // e.g. high-latency mix networks and some CoinJoin implementations, have
-    // better privacy.
-    if (GetRandInt(10) == 0)
-        txNew.nLockTime = std::max(0, (int)txNew.nLockTime - GetRandInt(100));
-
-    assert(txNew.nLockTime <= (unsigned int)chainActive.Height());
-    assert(txNew.nLockTime < LOCKTIME_THRESHOLD);
     CAmount nFeeNeeded;
     unsigned int nBytes;
     {
@@ -2893,9 +2862,7 @@ bool CWallet::CreateTransaction(const std::vector<CRecipient>& vecSend, CWalletT
 
                 // Fill vin
                 //
-                // Note how the sequence number is set to non-maxint so that
-                // the nLockTime set above actually works.
-                const uint32_t nSequence = CTxIn::SEQUENCE_FINAL - 1;
+                const uint32_t nSequence = CTxIn::SEQUENCE_FINAL;
                 for (const auto& coin : setCoins)
                     txNew.vin.push_back(CTxIn(coin.outpoint,CScript(),
                                               nSequence));
@@ -2913,6 +2880,13 @@ bool CWallet::CreateTransaction(const std::vector<CRecipient>& vecSend, CWalletT
                     vin.scriptSig = CScript();
                     vin.scriptWitness.SetNull();
                 }
+
+//ppcTODO: this code was in 0.7, but was refactored by b33d1f5ee512da5719b793b3867f75f1eea5cf52:
+//                int64 nPayFee;
+//                if (fNewFees)
+//                    nPayFee = (nBytes < 100) ? MIN_TX_FEE : (int64)(nBytes * (nTransactionFee / 1000));
+//                else
+//                    nPayFee = nTransactionFee * (1 + (int64)nBytes / 1000);
 
                 nFeeNeeded = GetMinFee(nBytes, txNew.nTime);
                 if (nFeeRet >= nFeeNeeded) {
@@ -2960,7 +2934,7 @@ bool CWallet::CreateTransaction(const std::vector<CRecipient>& vecSend, CWalletT
                     CAmount additionalFeeNeeded = nFeeNeeded - nFeeRet;
                     std::vector<CTxOut>::iterator change_position = txNew.vout.begin()+nChangePosInOut;
                     // Only reduce change if remaining amount is still a large enough output.
-                    if (change_position->nValue >= MIN_FINAL_CHANGE + additionalFeeNeeded) {
+                    if (change_position->nValue >= MIN_CHANGE + additionalFeeNeeded) {
                         change_position->nValue -= additionalFeeNeeded;
                         nFeeRet += additionalFeeNeeded;
                         break; // Done, able to increase fee from change
@@ -4274,57 +4248,6 @@ CTxDestination CWallet::AddAndGetDestinationForScript(const CScript& script, Out
     }
 }
 
-bool GetCoinAge(const CTransaction& tx, uint64_t& nCoinAge, int64_t nCoinValue)
-{
-    arith_uint256 bnCentSecond = 0;  // coin age in the unit of cent-seconds
-    nCoinAge = 0;
-    nCoinValue = 0;
-
-    if (tx.IsCoinBase())
-        return true;
-
-    for (unsigned int i=0; i < tx.vin.size(); i++) {
-        const CTxIn& txIn = tx.vin[i];
-        const uint256& hashTx = txIn.prevout.hash;
-        uint256 hashBlock;
-        CTransactionRef txPrevRef;
-
-        // First try finding the previous transaction in database
-        unsigned int nTxOffset = 0;
-        if (!GetTransaction(hashTx, txPrevRef, Params().GetConsensus(), hashBlock, true)) {
-            LogPrintf("%s(): INFO: read txPrev failed\n", __func__);  // previous transaction not in main chain, may occur during initial download
-            return false;
-        }
-
-        const CTransaction& txPrev = *txPrevRef;
-
-        if (tx.nTime < txPrev.nTime)
-            return false;  // Transaction timestamp violation
-
-        // Read block header
-        CBlock block;
-        CBlockIndex* pblockindex = mapBlockIndex[hashBlock];
-        if(!ReadBlockFromDisk(block, pblockindex, Params().GetConsensus())) {
-            LogPrintf("Failed to read from disk\n");
-            return false;
-        }
-
-        if (block.GetBlockTime() + Params().GetConsensus().nStakeMinAge > tx.nTime)
-            continue; // only count coins meeting min age requirement
-
-        int64_t nValueIn = txPrev.vout[txIn.prevout.n].nValue;
-        nCoinValue += nValueIn;
-        bnCentSecond += arith_uint256(nValueIn) * (tx.nTime - txPrev.nTime) / CENT;
-
-        LogPrintf("coin age nValueIn=%ld nTimeDiff=%ld bnCentSecond=%s\n", nValueIn, tx.nTime - txPrev.nTime, bnCentSecond.ToString());
-    }
-
-    arith_uint256 bnCoinDay = bnCentSecond * CENT / COIN / (24 * 60 * 60);
-    LogPrintf("coin age bnCoinDay=%s\n", bnCoinDay.ToString());
-
-    nCoinAge = ArithToUint256(bnCoinDay).GetUint64(0);
-    return true;
-}
 
 // mmocoin: create coin stake transaction
 typedef std::vector<unsigned char> valtype;
@@ -4496,7 +4419,8 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
     {
         uint64_t nCoinAge;
         int64_t nCoinAmount;
-        if (!GetCoinAge(txNew, nCoinAge, nCoinAmount))
+        CCoinsViewCache view(pcoinsTip.get());
+        if (!GetCoinAge(txNew, view, nCoinAge, nCoinAmount))
             return error("CreateCoinStake : failed to calculate coin age");
 
         CAmount nReward = GetProofOfStakeReward(nCoinAge, nCoinAmount);
