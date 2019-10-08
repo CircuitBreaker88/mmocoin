@@ -1083,13 +1083,14 @@ void static InvalidChainFound(CBlockIndex* pindexNew)
 
     LogPrintf("%s: invalid block=%s  height=%d  log2_trust=%.8g  moneysupply=%s  date=%s  moneysupply=%s\n", __func__,
       pindexNew->GetBlockHash().ToString(), pindexNew->nHeight,
-      log(pindexNew->nChainTrust.getdouble())/log(2.0), 
+      log(pindexNew->nChainTrust.getdouble())/log(2.0),
       FormatMoney(chainActive.Tip()->nMoneySupply),
       DateTimeStrFormat("%Y-%m-%d %H:%M:%S", pindexNew->GetBlockTime()),
       FormatMoney(pindexNew->nMoneySupply));
-    CBlockIndex *tip = chainActive.Tip();
-    assert (tip);
-    LogPrintf("%s:  current best=%s  height=%d  log2_trust=%.8g  moneysupply=%s  date=%s  moneysupply=%s\n", __func__,
+      CBlock block;
+      CBlockIndex *tip = chainActive.Tip();
+      assert (tip);
+      LogPrintf("%s:  current best=%s  height=%d  log2_trust=%.8g  moneysupply=%s  date=%s  moneysupply=%s\n", __func__,
       tip->GetBlockHash().ToString(), chainActive.Height(), log(tip->nChainTrust.getdouble())/log(2.0),
       FormatMoney(chainActive.Tip()->nMoneySupply),
       DateTimeStrFormat("%Y-%m-%d %H:%M:%S", tip->GetBlockTime()), FormatMoney(pindexNew->nMoneySupply));
