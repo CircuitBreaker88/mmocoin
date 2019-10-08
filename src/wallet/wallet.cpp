@@ -574,7 +574,7 @@ bool CWallet::IsSpent(const uint256& hash, unsigned int n) const
         std::map<uint256, CWalletTx>::const_iterator mit = mapWallet.find(wtxid);
         if (mit != mapWallet.end()) {
             int depth = mit->second.GetDepthInMainChain();
-            if (depth > 0  || (depth == 0 && !mit->second.isAbandoned()))
+            if (depth > 0  || (depth == 0 && !mit->second.isAbandoned() && !mit->second.IsCoinStake()))
                 return true; // Spent
         }
     }
@@ -1201,7 +1201,10 @@ void CWallet::MarkConflicted(const uint256& hashBlock, const uint256& hashTx)
     }
 }
 
-void CWallet::SyncTransaction(const CTransactionRef& ptx, const CBlockIndex *pindex, int posInBlock) {
+void CWallet::SyncTransaction(const CTransactionRef& ptx, const CBlockIndex *pindex, int posInBlock)
+{
+    LOCK2(cs_main, cs_wallet);
+
     const CTransaction& tx = *ptx;
 
     if (!AddToWalletIfInvolvingMe(ptx, pindex, posInBlock, true))
@@ -1210,12 +1213,11 @@ void CWallet::SyncTransaction(const CTransactionRef& ptx, const CBlockIndex *pin
     // If a transaction changes 'conflicted' state, that changes the balance
     // available of the outputs it spends. So force those to be
     // recomputed, also:
-    for (const CTxIn& txin : tx.vin) {
+    BOOST_FOREACH(const CTxIn& txin, tx.vin) {
         auto it = mapWallet.find(txin.prevout.hash);
-        if (it != mapWallet.end()) {
-            it->second.MarkDirty();
+        if (mapWallet.count(txin.prevout.hash))
+           mapWallet[txin.prevout.hash].MarkDirty();
         }
-    }
 }
 
 void CWallet::TransactionAddedToMempool(const CTransactionRef& ptx) {
