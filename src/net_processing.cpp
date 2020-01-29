@@ -1762,6 +1762,13 @@ bool static ProcessMessage(CNode* pfrom, const std::string& strCommand, CDataStr
         Misbehaving(pfrom->GetId(), 1);
         return false;
     }
+	 
+	if (index->nHeight >= 1033490 && pfrom->nVersion < 70004) {
+           // disconnect from peers older than this proto version
+           LogPrintf("partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
+           pfrom->fDisconnect = true;
+           return false;
+	}
 
     // mmocoin: set/unset network serialization mode for new clients
     if (pfrom->nVersion <= OLD_VERSION)
