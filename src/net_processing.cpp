@@ -1763,7 +1763,7 @@ bool static ProcessMessage(CNode* pfrom, const std::string& strCommand, CDataStr
         return false;
     }
 	 
-	if (pindex->nHeight >= 1033490 && pfrom->nVersion < 70004) {
+	if (GetTime() >= 1582000000 && pfrom->nVersion < 70004) {
            // disconnect from peers older than this proto version
            LogPrintf("partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
            pfrom->fDisconnect = true;
