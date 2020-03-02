@@ -11,14 +11,15 @@
 |:-----------|:-----------|
 | 1-1000 | `100,000 MMO` |
 | 1001-2000 | `1 MMO` |
-| 2001+ | `PoS` |
+| 2001+ | `PoW & PoS` |
+| 1035000+ | `PoW 0.01 MMO & PoS` |
 
 
 | Specification | Value |
 |:-----------|:-----------|
-| Block spacing | `90 Seconds` |
-| MinStakeAge | `4 Hours` |
-| MaxStakeAge | `2 Months` |
+| Block spacing | `300 Seconds` |
+| MinStakeAge | `30 days` |
+| MaxStakeAge | `90 days` |
 
 
 ### Staking Info
