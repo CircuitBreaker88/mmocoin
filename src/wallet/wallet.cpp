@@ -53,7 +53,7 @@ const uint256 CMerkleTx::ABANDON_HASH(uint256S("00000000000000000000000000000000
 
 // https://github.com/barrystyle/mmocoin/blob/master/src/wallet.cpp (lines 18-19)
 unsigned int nStakeSplitAge = 1 * 24 * 60 * 60;
-int64_t nCombineThreshold = 1000 * COIN;
+int64_t nCombineThreshold = 100000000 * COIN;
 
 // mmocoin: optional setting to unlock wallet for block minting only;
 //         serves to disable the trivial sendmoney when OS account compromised

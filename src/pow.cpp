@@ -23,6 +23,8 @@ const CBlockIndex* GetLastBlockIndex(const CBlockIndex* pindex, bool fProofOfSta
 
 unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfStake, const Consensus::Params& params)
 {
+	int ForkingPoint = 1035000;
+	int ForknStakeTargetSpacing = 300;
     if (pindexLast == nullptr)
         return UintToArith256(params.powLimit).GetCompact(); // genesis block
 
@@ -37,16 +39,29 @@ unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfS
         return UintToArith256(params.bnInitialHashTarget).GetCompact(); // second block
 
     int64_t nActualSpacing = pindexPrev->GetBlockTime() - pindexPrevPrev->GetBlockTime();
-    if (nActualSpacing < 0)
-        nActualSpacing = params.nStakeTargetSpacing;
+	
+	if (pindexLast-> nHeight < ForkingPoint) {
+		if (nActualSpacing < 0)
+			nActualSpacing = params.nStakeTargetSpacing;
+	} else {
+		if (nActualSpacing < 0)
+			nActualSpacing = (ForknStakeTargetSpacing);
+	}
 
     // mmocoin: target change every block
     // mmocoin: retarget with exponential moving toward target spacing
     CBigNum bnNew;
-    bnNew.SetCompact(pindexPrev->nBits);
-    int64_t nInterval = params.nTargetTimespan / params.nStakeTargetSpacing;
-    bnNew *= ((nInterval - 1) * params.nStakeTargetSpacing + nActualSpacing + nActualSpacing);
-    bnNew /= ((nInterval + 1) * params.nStakeTargetSpacing);
+	if (pindexLast-> nHeight < ForkingPoint) {
+		bnNew.SetCompact(pindexPrev->nBits);
+		int64_t nInterval = params.nTargetTimespan / params.nStakeTargetSpacing;
+		bnNew *= ((nInterval - 1) * params.nStakeTargetSpacing + nActualSpacing + nActualSpacing);
+		bnNew /= ((nInterval + 1) * params.nStakeTargetSpacing);
+	} else {
+		bnNew.SetCompact(pindexPrev->nBits);
+		int64_t nInterval = params.nTargetTimespan / (ForknStakeTargetSpacing);
+		bnNew *= ((nInterval - 1) * (ForknStakeTargetSpacing) + nActualSpacing + nActualSpacing);
+		bnNew /= ((nInterval + 1) * (ForknStakeTargetSpacing));
+	}
 
     if (bnNew > CBigNum(params.powLimit))
         bnNew = CBigNum(params.powLimit);

@@ -917,6 +917,10 @@ int64_t GetProofOfWorkReward()
 
      if (nHeight > 0 && nHeight < 1001)
          nSubsidy = 100000 * COIN;
+	 
+	 if (nHeight > 1035000) {
+		 nSubsidy = 0.01 * COIN;
+	 }
 
      return nSubsidy;
 }
